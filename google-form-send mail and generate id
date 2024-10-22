@@ -1,0 +1,109 @@
+function onFormSubmit(e) {
+  try {
+    Logger.log('Form submission received');
+
+    // Log the entire event object to inspect its structure
+    Logger.log(JSON.stringify(e));
+
+    const responses = e.response.getItemResponses();
+    Logger.log('Form Responses: ' + JSON.stringify(responses));
+
+    if (!responses || responses.length === 0) {
+      Logger.log("No form data received.");
+      return;
+    }
+
+    // Extract user email from the responses (adjust based on your form fields)
+    const userEmail = responses[1].getResponse(); // Assuming the second question is email
+    Logger.log('User Email: ' + userEmail);
+
+    if (userEmail) {
+      const uniqueId = generateUniqueId();  // Generate a unique ID for the user
+      Logger.log('Generated Unique ID: ' + uniqueId); // Log the generated unique ID
+      
+      if (uniqueId) {
+        // Save the unique ID to the same row as the form submission
+        saveUniqueIdToSheet(uniqueId, e.response);  // Pass the entire response object
+        sendConfirmationEmail(userEmail, uniqueId);  // Send the confirmation email
+      } else {
+        Logger.log("Failed to generate a unique ID.");
+      }
+    } else {
+      Logger.log("Email not found in the form response.");
+    }
+  } catch (error) {
+    Logger.log(`Error in onFormSubmit: ${error.message}`);
+  }
+}
+
+// Function to generate a unique ID
+function generateUniqueId() {
+  try {
+    const prefix = 'REG-';
+    const timestamp = new Date().getTime().toString().slice(-6); // Use the last 6 digits of the timestamp
+    const randomNum = Math.floor(100000 + Math.random() * 900000);  // Generate a 6-digit random number
+    const uniqueId = `${prefix}${timestamp}-${randomNum}`;
+    Logger.log('Unique ID generated: ' + uniqueId); // Log the unique ID
+    return uniqueId;
+  } catch (error) {
+    Logger.log(`Error generating unique ID: ${error.message}`);
+    return null; // Return null if there's an error
+  }
+}
+
+// Function to send a confirmation email
+function sendConfirmationEmail(userEmail, uniqueId) {
+  try {
+    const subject = 'BGS Registration Confirmation';
+    const body = `Dear User,\n\nThank you for registering! Your unique Registration ID is: ${uniqueId}.\n\nBest Regards,\nRegistration Team`;
+    
+    // Send email using the alias as the "From" address
+    MailApp.sendEmail({
+      to: userEmail,
+      subject: subject,
+      body: body,
+      from: "info@bgsglaucoma.com", // Use the alias as the sender's address
+      replyTo: "info@bgsglaucoma.com" // Set the reply-to address
+    });
+
+    Logger.log(`Confirmation email sent to: ${userEmail} from info@bgsglaucoma.com`);
+  } catch (error) {
+    Logger.log(`Error sending email: ${error.message}`);
+  }
+}
+
+// Function to save unique ID to the "RegNo" column in the same row as the form submission
+function saveUniqueIdToSheet(uniqueId, response) {
+  try {
+    if (!uniqueId) {
+      throw new Error('Unique ID is undefined or null.');
+    }
+    
+    const spreadsheetId = '1X11GzlYm-WdESvhT56P9-FIiXwS-PPpKnYzTJh8PRTs';  // Replace with your actual spreadsheet ID
+    const sheet = SpreadsheetApp.openById(spreadsheetId).getSheetByName('Form Responses 1');  // Specify the sheet by name
+
+    if (!sheet) {
+      throw new Error('Unable to find the specified sheet.');
+    }
+
+    // Get the row number of the latest submission
+    const lastRow = sheet.getLastRow(); // Get the last row number where new data is added
+    Logger.log(`Last Row: ${lastRow}`);
+
+    // Get the column index for "RegNo"
+    const headerRange = sheet.getRange(1, 1, 1, sheet.getLastColumn());
+    const headers = headerRange.getValues()[0];
+    const regNoColumnIndex = headers.indexOf('RegNo') + 1; // Get the index of the RegNo column (1-based)
+
+    if (regNoColumnIndex === 0) {
+      throw new Error('RegNo column not found in the sheet.');
+    }
+
+    // Update the RegNo column in the corresponding row with the unique ID
+    sheet.getRange(lastRow, regNoColumnIndex).setValue(uniqueId); // Save unique ID to the "RegNo" column
+    Logger.log(`Unique ID saved: ${uniqueId} in column 'RegNo'`);
+    
+  } catch (error) {
+    Logger.log(`Error saving unique ID to sheet: ${error.message}`);
+  }
+}
